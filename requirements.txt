@@ -1,0 +1,10 @@
+faicons
+joblib
+pandas
+plotly
+python_dateutil
+Requests
+shiny
+shinywidgets
+sqlitecloud
+openpyxl
