@@ -13,16 +13,18 @@ from datetime import datetime, time
 
 import pandas as pd
 
-from db import get_rows_between
-#PRICE_DATA =  get_last_n_rows(7*24)   # Last 7 days
+from pathlib import Path
+import os
 
+from db import get_rows_between
 from api import get_forecast
-FORECAST_DATA = get_forecast()
+
+FORECAST_DATA = None#get_forecast()
 
 import joblib
 
 model = joblib.load(app_dir / 'model/model.joblib')
-FORECAST_DATA['predictions'] = model.predict(FORECAST_DATA.drop(columns=['Aika','Hinta_snt_per_kWh']))
+#FORECAST_DATA['predictions'] = model.predict(FORECAST_DATA.drop(columns=['Aika','Hinta_snt_per_kWh']))
 
 date_rng = (datetime(2024,1,1).strftime('%Y-%m-%d'),
             datetime.now().strftime('%Y-%m-%d'))
@@ -106,28 +108,28 @@ with ui.layout_columns(fill=False):
 
         @render.express
         def avg_temp():
-            '{0:.2f}'.format(FORECAST_DATA['Lampotilan_keskiarvo_C'].mean())
+            '{0:.2f}'.format(FORECAST_DATA['Lampotilan_keskiarvo_C'].mean()) if FORECAST_DATA is not None else ''
 
     with ui.value_box(showcase=ICONS["production"]):
         "Average Production [MW]"
 
         @render.express
         def avg_prod():
-            '{0:.2f}'.format(FORECAST_DATA['Tuotanto_kW'].mean() / 1000)
+            '{0:.2f}'.format(FORECAST_DATA['Tuotanto_kW'].mean() / 1000) if FORECAST_DATA is not None else ''
 
     with ui.value_box(showcase=ICONS["consumption"]):
         "Average Consumption [MWh]"
 
         @render.express
         def avg_consumption():
-            '{0:.2f}'.format(FORECAST_DATA['Kulutus_kWh_per_h'].mean() / 1000)
+            '{0:.2f}'.format(FORECAST_DATA['Kulutus_kWh_per_h'].mean() / 1000) if FORECAST_DATA is not None else ''
 
     with ui.value_box(showcase=ICONS["currency-dollar"]):
         "Average Price [ckWh]"
 
         @render.express
         def avg_price():
-            '{0:.2f}'.format(FORECAST_DATA['Hinta_snt_per_kWh'].mean())
+            '{0:.2f}'.format(FORECAST_DATA['Hinta_snt_per_kWh'].mean()) if FORECAST_DATA is not None else ''
 
 
 
@@ -136,6 +138,35 @@ ui.include_css(app_dir / "styles.css")
 # --------------------------------------------------------
 # Reactive calculations and effects
 # --------------------------------------------------------
+
+def forecast_data():
+
+    global FORECAST_DATA
+
+    def download_and_prepare_forecast():
+        FORECAST_DATA = get_forecast()
+        FORECAST_DATA['predictions'] = model.predict(FORECAST_DATA.drop(columns=['Aika','Hinta_snt_per_kWh']))
+        FORECAST_DATA.to_csv(app_dir / "forecast.csv", mode='w', index=False)
+        FORECAST_DATA['Aika'] = pd.to_datetime(FORECAST_DATA['Aika'])
+        return FORECAST_DATA
+    
+    if FORECAST_DATA is not None:
+
+        if FORECAST_DATA.iloc[0]['Aika'].date() == datetime.now().date():
+            return FORECAST_DATA
+        
+        return download_and_prepare_forecast()
+    print('Path: ', app_dir / "forecast.csv")
+    # FORECAST_DATA doesn't exists in memory
+    if os.path.exists(app_dir / "forecast.csv"):
+
+        FORECAST_DATA = pd.read_csv(app_dir / "forecast.csv")
+        FORECAST_DATA['Aika'] = pd.to_datetime(FORECAST_DATA['Aika'])
+
+        if FORECAST_DATA.iloc[0]['Aika'].date() == datetime.now().date():    # same date
+             return FORECAST_DATA
+
+    return  download_and_prepare_forecast()
 
 @reactive.calc
 def price_data():
@@ -150,7 +181,7 @@ def price_data():
     startDate, endDate = selected_date_range()
 
     if startDate == endDate == datetime.now().date():
-        return FORECAST_DATA
+        return forecast_data()
     
     try:
         DATA = get_rows_between(datetime.combine(startDate,time(0,0,0)),datetime.combine(endDate,time(23,59,59))) 
@@ -160,13 +191,13 @@ def price_data():
             DATA['predictions'] = pd.Series()
 
         if endDate == datetime.now().date():    # append forecast data
-            return pd.concat([DATA,FORECAST_DATA],ignore_index=False)
+            return pd.concat([DATA,forecast_data()],ignore_index=False)
         
         return DATA
     except Exception as e:
         print('error getting data from database.',e)
         ui.notification_show(f"Failed to get data from database.",type="error",duration=3)
-        return FORECAST_DATA
+        return forecast_data()
     
 
 

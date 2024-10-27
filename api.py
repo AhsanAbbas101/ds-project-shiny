@@ -1,4 +1,4 @@
-import os
+
 from pathlib import Path
 
 import requests
@@ -85,8 +85,7 @@ def get_electricity_consumption_forecast():
 
             x = response.json()
             ec_pred_df = pd.DataFrame(x['data'])
-            print(ec_pred_df)    
-
+   
             ec_pred_df = process_fingrid_data(ec_pred_df,col='Kulutus')
 
             ec_pred_df.rename(columns={'Kulutus (kW)': 'Kulutus_kWh_per_h'}, inplace=True)
@@ -117,8 +116,7 @@ def get_electricity_production_forecast():
 
             x = response.json()
             ec_pred_df = pd.DataFrame(x['data'])
-            print(ec_pred_df)    
-
+ 
             ec_pred_df = process_fingrid_data(ec_pred_df,col='Tuotanto')
 
             ec_pred_df.rename(columns={'Tuotanto (kW)': 'Tuotanto_kW'}, inplace=True)
@@ -330,17 +328,8 @@ def get_weather(startDate:datetime,
 
 def get_forecast():
 
-    app_dir = Path(__file__).parent
-    if os.path.exists(app_dir / "forecast.csv"):
-        print('forecast available')
-        forecast = pd.read_csv(app_dir / "forecast.csv")
-        forecast['Aika'] = pd.to_datetime(forecast['Aika'])
-
-        if forecast.iloc[0]['Aika'].date() == datetime.now().date():    # same date
-             return forecast
-
     consumption = get_electricity_consumption_forecast()
-    time_wind = get_weather_forecast(forecast_days=1)
+    time_wind = get_weather_forecast(forecast_days=3)
     production = get_electricity_production_forecast()
     price = get_price_forecast()
 
@@ -348,7 +337,7 @@ def get_forecast():
     print('consumption shape: ',consumption.shape)
     print('production shape: ',production.shape)
     print('price shape: ',price.shape)
-
+    
     forecast = pd.merge(consumption, production, on='Aika', how='inner')
     print('forecast shape: ',forecast.shape)
 
@@ -366,8 +355,7 @@ def get_forecast():
 
     columns = ['Aika','Hinta_snt_per_kWh','Keskituulen_nopeus_m_per_s','Lampotilan_keskiarvo_C','Kulutus_kWh_per_h','Tuotanto_kW','is_holiday']
     forecast = forecast[columns]
-    forecast.to_csv(app_dir / "forecast.csv", mode='w', index=False)
-
+    
     return forecast
 
 def get_old_data(startDate,endDate):
