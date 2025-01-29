@@ -5,6 +5,8 @@ plotly
 python_dateutil
 Requests
 shiny
+anywidget
+ipywidgets
 shinywidgets
 sqlitecloud
 openpyxl
